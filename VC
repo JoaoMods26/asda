@@ -1,0 +1,204 @@
+VoiceTab:CreateSection("Anti-Ban")
+
+--- BOTÓN PRINCIPAL
+VoiceTab:CreateButton({
+    Name = "Anti VC Ban",
+    Callback = function()
+        local UserInputService = game:GetService("UserInputService")
+        local RunService = game:GetService("RunService")
+        local TweenService = game:GetService("TweenService")
+        local Players = game:GetService("Players")
+        local CoreGui = game:GetService("CoreGui")
+        local VirtualInputManager = game:GetService("VirtualInputManager")
+
+        local LocalPlayer = Players.LocalPlayer
+        local Mouse = LocalPlayer:GetMouse()
+
+        local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+        local platform = isMobile and "📱 MÓVIL" or "🖥️ PC"
+
+        local Config = {
+            DebugMode = true,
+            MaxRetries = 15,
+            RetryDelay = 0.3,
+            ClickOffsetX = 0,
+            ClickOffsetY = isMobile and 0 or 50,
+        }
+
+        local VoiceButton = nil
+        local IconHitArea = nil
+        local RedVoiceDot = nil
+
+        local function FindVoiceButton()
+            local success, result = pcall(function()
+                for _, obj in ipairs(CoreGui:GetDescendants()) do
+                    if obj.Name == "toggle_mic_mute" and obj:IsA("GuiObject") then
+                        local hitArea = obj:FindFirstChild("IconHitArea_toggle_mic_mute", true)
+                        if not hitArea then
+                            for _, child in ipairs(obj:GetDescendants()) do
+                                if string.find(child.Name:lower(), "iconhitarea") or 
+                                   string.find(child.Name:lower(), "hitarea") then
+                                    hitArea = child
+                                    break
+                                end
+                            end
+                            
+                            if not hitArea then
+                                hitArea = obj
+                            end
+                        end
+                        
+                        local redDot = obj:FindFirstChild("RedVoiceDot", true)
+                        if not redDot then
+                            for _, child in ipairs(obj:GetDescendants()) do
+                                local lowerName = child.Name:lower()
+                                if string.find(lowerName, "red") or 
+                                   string.find(lowerName, "dot") or 
+                                   string.find(lowerName, "mute") then
+                                    redDot = child
+                                    break
+                                end
+                            end
+                        end
+                        
+                        return obj, hitArea, redDot
+                    end
+                end
+                
+                return nil, nil, nil
+            end)
+            
+            if success and result then
+                return result
+            else
+                return nil, nil, nil
+            end
+        end
+
+        local function ClickVoiceButton()
+            if not IconHitArea or not IconHitArea.Parent then
+                if VoiceButton and VoiceButton.Parent then
+                    IconHitArea = VoiceButton
+                else
+                    return false
+                end
+            end
+            
+            local success = pcall(function()
+                local absolutePos = IconHitArea.AbsolutePosition
+                local absoluteSize = IconHitArea.AbsoluteSize
+                
+                local centerX = absolutePos.X + (absoluteSize.X / 2) + Config.ClickOffsetX
+                local centerY = absolutePos.Y + (absoluteSize.Y / 2) + Config.ClickOffsetY
+                
+                if isMobile then
+                    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 1)
+                    task.wait(0.05)
+                    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 1)
+                else
+                    local initialMouseX = Mouse.X
+                    local initialMouseY = Mouse.Y
+                    
+                    mousemoveabs(centerX, centerY)
+                    task.wait(0.05)
+                    
+                    mouse1click()
+                    task.wait(0.05)
+                    
+                    mousemoveabs(initialMouseX, initialMouseY)
+                end
+            end)
+            
+            return success
+        end
+
+        local function ActivateVoiceDot()
+            local retries = 0
+            local dotFound = false
+            
+            while retries < Config.MaxRetries and not dotFound do
+                VoiceButton, IconHitArea, RedVoiceDot = FindVoiceButton()
+                
+                if VoiceButton then
+                    if not RedVoiceDot then
+                        if ClickVoiceButton() then
+                            task.wait(0.5)
+                            
+                            if VoiceButton and VoiceButton.Parent then
+                                RedVoiceDot = VoiceButton:FindFirstChild("RedVoiceDot", true)
+                                
+                                if not RedVoiceDot then
+                                    for _, child in ipairs(VoiceButton:GetDescendants()) do
+                                        local lowerName = child.Name:lower()
+                                        if string.find(lowerName, "red") or 
+                                           string.find(lowerName, "dot") or 
+                                           string.find(lowerName, "mute") then
+                                            RedVoiceDot = child
+                                            break
+                                        end
+                                    end
+                                end
+                            end
+                            
+                            if RedVoiceDot and RedVoiceDot.Visible then
+                                dotFound = true
+                            end
+                        end
+                    else
+                        if RedVoiceDot.Visible then
+                            dotFound = true
+                        else
+                            if ClickVoiceButton() then
+                                task.wait(0.5)
+                                if RedVoiceDot.Visible then
+                                    dotFound = true
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                if not dotFound then
+                    retries = retries + 1
+                    task.wait(Config.RetryDelay)
+                end
+            end
+            
+            return dotFound
+        end
+
+        local dotActivated = ActivateVoiceDot()
+
+        local vc = game:GetService("VoiceChatService")
+        local vi = game:GetService("VoiceChatInternal")
+        local gid = vi:GetGroupId()
+
+        vi:JoinByGroupId(gid,false)
+        vc:leaveVoice()
+        task.wait()
+
+        for i = 1, 4 do
+            vi:JoinByGroupId(gid,false)
+        end
+
+        task.wait(5)
+        vc:joinVoice()
+        vi:JoinByGroupId(gid,false)
+    end
+})
+
+VoiceTab:CreateParagraph({
+    Title = "Información",
+    Content = "Al precionar el boton solo esperen unos segundos a que el toggle de voice chat se les active automaticamente,"
+})
+
+
+VoiceTab:CreateParagraph({
+    Title = "Importante",
+    Content = "Una vez Todo funcional no desactiven el microfono o les dejara de funcionar. ademas cada que salgan tienen que volver a activarlo en las configuraciones ya q se les desactivara"
+})
+
+VoiceTab:CreateParagraph({
+    Title = "Creditos",
+    Content = "NullModder x joao_mods"
+})
